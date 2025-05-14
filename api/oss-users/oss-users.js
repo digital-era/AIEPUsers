@@ -14,52 +14,78 @@ const USERS_FILE = 'users.json'; // 你的文件名
 
 module.exports = async (req, res) => {
   // --- CORS Headers ---
-  // 允许所有源访问。生产环境中，你可能希望限制为你的前端域名
-  // 例如: res.setHeader('Access-Control-Allow-Origin', 'https://your-frontend-domain.com');
   res.setHeader('Access-Control-Allow-Origin', '*');
-  // 允许的 HTTP 方法
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS'); // 根据你的 API 支持的方法调整
-  // 允许的请求头
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization'); // Authorization 如果你将来会用
-  // 允许凭证（例如 cookies），如果你的前端需要发送凭证。
-  // 如果 Access-Control-Allow-Origin 是 '*'，则不能设置 Access-Control-Allow-Credentials 为 'true'。
-  // 如果源是特定的，可以启用: res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS'); // 只包含你实际支持的方法
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   // --- Handle OPTIONS preflight request ---
   if (req.method === 'OPTIONS') {
-    res.status(204).end(); // 204 No Content，表示预检成功
-    return; // 结束处理，不执行后续逻辑
+    res.status(204).end();
+    return;
   }
 
-  // --- 你现有的 API 逻辑开始于此 ---
+  // --- API Logic ---
   if (req.method === 'GET') {
-    // 你处理 GET 请求的逻辑
     try {
-      const result = await client.get('users.json');
+      let result;
+      try {
+        result = await client.get(USERS_FILE);
+      } catch (getSpecificError) {
+        // 如果文件不存在，可以考虑创建一个空的，或者返回特定状态
+        if (getSpecificError.code === 'NoSuchKey' || getSpecificError.status === 404) {
+          // 选项1: 返回 404
+          // return res.status(404).json({ error: 'Users file not found' });
+
+          // 选项2: 创建空文件并返回空对象 (如同之前的版本)
+          console.log(`'${USERS_FILE}' not found. Creating it with default content.`);
+          await client.put(USERS_FILE, Buffer.from('{}'));
+          return res.status(200).json({});
+        }
+        // 其他 get 错误，重新抛出由外层 catch 处理 (如果需要两层 catch)
+        // 或者直接在这里处理
+        throw getSpecificError;
+      }
       res.status(200).json(JSON.parse(result.content.toString()));
     } catch (error) {
       console.error('OSS GET error:', error);
-      res.status(500).json({ error: 'Failed to fetch users' });
+      res.status(error.status || 500).json({
+        error: 'Failed to fetch users',
+        details: error.message, // 提供更多错误细节
+        code: error.code       // 提供错误码
+      });
     }
   } else if (req.method === 'POST') {
-    // 你处理 POST 请求的逻辑
-    const { users } = req.body;
-    if (!users) {
-      return res.status(400).json({ error: 'Users data required' });
+    const requestBody = req.body;
+    let usersToSave;
+
+    // 根据 auth.js, req.body 应该是 { users: { ...actualUserData... } }
+    if (requestBody && typeof requestBody.users === 'object' && requestBody.users !== null) {
+        usersToSave = requestBody.users;
+    } else {
+      // 如果不符合预期结构，返回错误
+      return res.status(400).json({ error: 'Users data required in the "users" field of the request body' });
     }
+
+    // 可选：进行更严格的 usersToSave 数据验证
+    if (Object.keys(usersToSave).length === 0 && JSON.stringify(usersToSave) !== '{}') {
+        // 防止传入空对象但不是 {} 的情况，例如 { users: null } 经过上面处理后 usersToSave 会是 null
+        // 但如果你的逻辑允许空用户列表 (例如清空用户)，则此检查可能不需要或需要调整
+    }
+
     try {
-      await client.put('users.json', Buffer.from(JSON.stringify(users)));
-      res.status(200).json({ message: 'Users updated' });
+      await client.put(USERS_FILE, Buffer.from(JSON.stringify(usersToSave)));
+      res.status(200).json({ message: 'Users updated successfully' }); // 成功的消息可以更具体
     } catch (error) {
       console.error('OSS PUT error:', error);
-      res.status(500).json({ error: 'Failed to update users' });
+      res.status(error.status || 500).json({
+        error: 'Failed to update users',
+        details: error.message,
+        code: error.code
+      });
     }
   } else {
-    res.status(405).json({ error: 'Method not allowed' });
-  }
-  // ... 其他 HTTP 方法的处理 (PUT, DELETE, etc.)
-  else {
-    res.setHeader('Allow', ['GET', 'POST', 'OPTIONS']); // 提示客户端允许的方法
+    // 处理所有其他不被允许的 HTTP 方法
+    res.setHeader('Allow', ['GET', 'POST', 'OPTIONS']); // 告诉客户端服务器允许哪些方法
     res.status(405).json({ error: `Method ${req.method} not allowed` });
   }
 };
