@@ -35,24 +35,27 @@ module.exports = async (req, res) => {
   if (req.method === 'GET') {
     // 你处理 GET 请求的逻辑
     try {
-      // 示例：const result = await client.get(USERS_FILE);
-      // res.status(200).json(JSON.parse(result.content.toString()));
-      res.status(200).json({ message: 'GET request received, replace with your logic' });
+      const result = await client.get('users.json');
+      res.status(200).json(JSON.parse(result.content.toString()));
     } catch (error) {
-      console.error('GET Error:', error);
-      res.status(error.status || 500).json({ error: 'Failed to process GET request', details: error.message });
+      console.error('OSS GET error:', error);
+      res.status(500).json({ error: 'Failed to fetch users' });
     }
   } else if (req.method === 'POST') {
     // 你处理 POST 请求的逻辑
-    try {
-      // const data = req.body;
-      // 示例：await client.put(USERS_FILE, Buffer.from(JSON.stringify(data)));
-      // res.status(200).json({ message: 'Data updated' });
-      res.status(200).json({ message: 'POST request received, replace with your logic', data: req.body });
-    } catch (error) {
-      console.error('POST Error:', error);
-      res.status(error.status || 500).json({ error: 'Failed to process POST request', details: error.message });
+    const { users } = req.body;
+    if (!users) {
+      return res.status(400).json({ error: 'Users data required' });
     }
+    try {
+      await client.put('users.json', Buffer.from(JSON.stringify(users)));
+      res.status(200).json({ message: 'Users updated' });
+    } catch (error) {
+      console.error('OSS PUT error:', error);
+      res.status(500).json({ error: 'Failed to update users' });
+    }
+  } else {
+    res.status(405).json({ error: 'Method not allowed' });
   }
   // ... 其他 HTTP 方法的处理 (PUT, DELETE, etc.)
   else {
