@@ -4,7 +4,7 @@ const client = new OSS({
   region: 'oss-cn-hangzhou',
   accessKeyId: process.env.OSS_ACCESS_KEY_ID,
   accessKeySecret: process.env.OSS_ACCESS_KEY_SECRET,
-  bucket: 'evolutionary-paradigm-users'
+  bucket: 'aiep-users'
 });
 
 module.exports = async (req, res) => {
