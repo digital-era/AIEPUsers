@@ -1,5 +1,8 @@
 {
   "dependencies": {
-    "ali-oss": "^6.17.1"
+    "ali-oss": "^6.17.1"    ,
+    "@alicloud/sts20150401": "^1.1.0",
+    "@alicloud/openapi-client": "^0.4.6",
+    "@alicloud/tea-util": "^1.4.7"
   }
 }
